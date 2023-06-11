@@ -1,23 +1,29 @@
 use std::net::SocketAddr;
 
 use axum::{
-    routing::{get, post},
-    http::StatusCode,
+    http::{ HeaderValue ,Method, StatusCode },
+    response::{ Html, IntoResponse },
+    routing::{ get, post },
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use tower_http::cors::CorsLayer;
 
 #[tokio::main]
 async fn main() {
     // initialize tracing
     tracing_subscriber::fmt::init();
 
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:8080".parse::<HeaderValue>().unwrap())
+        .allow_methods([Method::GET]);
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(root))
         // `POST /users` goes to `create_user`
-        .route("/users", post(create_user));
+        .route("/users", post(create_user))
+        .layer(cors);
 
     // run our app with hyper, listening globally on port 3000
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -26,7 +32,7 @@ async fn main() {
 
 // basic handler that responds with a static string
 async fn root() -> &'static str {
-    "Hello, World!"
+    "{\"hello\": \"world\" }"
 }
 
 async fn create_user(
