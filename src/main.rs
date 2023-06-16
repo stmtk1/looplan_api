@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 
 use axum::{
     http::{ HeaderValue ,Method, StatusCode },
-    response::{ Html, IntoResponse },
     routing::{ get, post },
     Json, Router,
 };
@@ -16,13 +15,13 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:8080".parse::<HeaderValue>().unwrap())
-        .allow_methods([Method::GET]);
+        .allow_methods([Method::GET, Method::POST]);
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
         .route("/", get(root))
         // `POST /users` goes to `create_user`
-        .route("/users", post(create_user))
+        .route("/login", post(create_session))
         .layer(cors);
 
     // run our app with hyper, listening globally on port 3000
@@ -35,31 +34,30 @@ async fn root() -> &'static str {
     "{\"hello\": \"world\" }"
 }
 
-async fn create_user(
+async fn create_session(
     // this argument tells axum to parse the request body
     // as JSON into a `CreateUser` type
-    Json(payload): Json<CreateUser>,
-) -> (StatusCode, Json<User>) {
+    Json(payload): Json<CreateSession>,
+) -> (StatusCode, Json<Session>) {
     // insert your application logic here
-    let user = User {
-        id: 1337,
-        username: payload.username,
+    let session = Session {
+        token: String::from("hello world"),
     };
 
     // this will be converted into a JSON response
     // with a status code of `201 Created`
-    (StatusCode::CREATED, Json(user))
+    (StatusCode::CREATED, Json(session))
 }
 
 // the input to our `create_user` handler
 #[derive(Deserialize)]
-struct CreateUser {
-    username: String,
+struct CreateSession {
+    user_name: String,
+    password: String,
 }
 
 // the output to our `create_user` handler
 #[derive(Serialize)]
-struct User {
-    id: u64,
-    username: String,
+struct Session {
+    token: String,
 }
