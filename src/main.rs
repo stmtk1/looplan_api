@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use axum::{
-    http::{ HeaderValue ,Method, StatusCode },
+    http::{ HeaderValue ,Method, StatusCode, header::CONTENT_TYPE },
     routing::{ get, post },
     Json, Router,
 };
@@ -15,7 +15,8 @@ async fn main() {
 
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:8080".parse::<HeaderValue>().unwrap())
-        .allow_methods([Method::GET, Method::POST]);
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers([CONTENT_TYPE]);
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
