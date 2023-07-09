@@ -22,28 +22,32 @@ db.createCollection("users", {
 					maxLength: 200,
 					pattern: '^\\$argon2i\\$v=19\\$m=\\d{1,10},t=\\d{1,10},p=\\d{1,3}\\$[\\w\\d]{11,84}\\$[\\w\\d+/]{16,86}$',
 				},
-				sessions: {
-					bsonType: "array",
-					description: "for authentication",
-					items: {
-						additionalProperties: false,
-						required: ["token", "user_id", "expired"],
-						properties: {
-							token: {
-								bsonType: "string",
-							},
-							user_id:  {
-								bsonType: "string"
-							},
-							expired: {
-								bsonType: "timestamp",
-							}
-						},
-					},
-					additionalItems: false,
-				}
 			},
 		},
 	},
 })
+
+db.createCollection("sessions", {
+	validator: {
+		$jsonSchema: {
+			bsonType: "object",
+			additionalProperties: false,
+			title: "Session Object Validation",
+			required: ["user_id", "token"],
+			properties: {
+				_id: {
+					bsonType: "objectId",
+				},
+				user_id: {
+					bsonType: "objectId",
+					description: "user associated",
+				},
+				token: {
+					bsonType: "string",
+					description: "for bearer token",
+				},
+			},
+		},
+	},
+});
 

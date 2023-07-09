@@ -4,6 +4,7 @@
         "keyid",
         "looplan",
         "serde",
+        "signin",
         "sqlx"
     ]
 }
