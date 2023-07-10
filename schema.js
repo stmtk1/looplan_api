@@ -51,3 +51,38 @@ db.createCollection("sessions", {
 	},
 });
 
+db.createCollection("schedule", {
+	validator: {
+		$jsonSchema: {
+			bsonType: "object",
+			additionalProperties: false,
+			title: "Schedule Object Validation",
+			required: ["user_id", "start_time", "end_time", "name", "description"],
+			properties: {
+				_id: {
+					bsonType: "objectId",
+				},
+				user_id: {
+					bsonType: "objectId",
+					description: "user associated",
+				},
+				start_time: {
+					bsonType: "date",
+					description: "schedule start time",
+				},
+				end_time: {
+					bsonType: "date",
+					description: "schedule start time",
+				},
+				name: {
+					bsonType: "string",
+					description: "schedule name",
+				},
+				description: {
+					bsonType: "string",
+					description: "schedule description",
+				},
+			},
+		},
+	},
+})
