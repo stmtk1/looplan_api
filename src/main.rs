@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 
 use axum::{
     extract::{ State, Query, },
@@ -6,8 +5,9 @@ use axum::{
     Json, Router,
     routing::{ get, post },
 };
-use mongodb::{options::ClientOptions, Client, bson::{oid::ObjectId, doc, DateTime}, Database};
+use mongodb::{options::ClientOptions, Client, bson::{oid::ObjectId, doc, DateTime }, Database};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -150,7 +150,9 @@ async fn get_schedule(
 
 #[derive(Deserialize)]
 struct GetSchedules {
+     #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
     start_time: DateTime,
+     #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
     end_time: DateTime,
 }
 
