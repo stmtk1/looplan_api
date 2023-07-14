@@ -145,7 +145,12 @@ async fn get_schedule(
 ) -> (StatusCode, Json<Schedules>) {
     let session = validate_session(&map, &db_pool).await;
     let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
-    let mut schedules_cursor = schedule_collection.find(Some(doc!{"user_id": session.user_id }), None).await.unwrap();
+    println!("{:?}", get_schedules.start_time.clone());
+    println!("{:?}", get_schedules.end_time.clone());
+    let mut schedules_cursor = schedule_collection.find(Some(doc!{
+        "user_id": session.user_id,
+        "start_time": { "$gte": get_schedules.start_time.clone(), "$lte": get_schedules.end_time.clone(), },
+    }), None).await.unwrap();
     let mut schedules = vec![];
     while schedules_cursor.advance().await.unwrap() {
         schedules.push(schedules_cursor.deserialize_current().unwrap().to_schedule());
