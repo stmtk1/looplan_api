@@ -64,7 +64,7 @@ async fn insert_user(db_pool: &Database, payload: CreateUser) {
     };
 
     let user_collection = db_pool.collection::<User>("users");
-    user_collection.insert_one(user, None).await.unwrap().inserted_id;
+    user_collection.insert_one(user, None).await.unwrap();
 }
 
 async fn insert_session(db_pool: &Database, dto: CreateSession) -> Session {
@@ -145,11 +145,9 @@ async fn get_schedule(
 ) -> (StatusCode, Json<Schedules>) {
     let session = validate_session(&map, &db_pool).await;
     let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
-    println!("{:?}", get_schedules.start_time.clone());
-    println!("{:?}", get_schedules.end_time.clone());
     let mut schedules_cursor = schedule_collection.find(Some(doc!{
         "user_id": session.user_id,
-        "start_time": { "$gte": get_schedules.start_time.clone(), "$lte": get_schedules.end_time.clone(), },
+        "start_time": { "$gte": get_schedules.start_time, "$lte": get_schedules.end_time, },
     }), None).await.unwrap();
     let mut schedules = vec![];
     while schedules_cursor.advance().await.unwrap() {
@@ -171,7 +169,7 @@ async fn create_schedule(
         id: None,
         name: payload.name.clone(),
         description: payload.description.clone(),
-        start_time: payload.start_time.clone(),
+        start_time: payload.start_time,
         end_time: payload.end_time,
         user_id: session.user_id,
     };
@@ -244,8 +242,8 @@ impl DbSchedule {
         Schedule {
             name: self.name.clone(),
             description: self.description.clone(),
-            id: self.id.clone(),
-            user_id: self.user_id.clone(),
+            id: self.id,
+            user_id: self.user_id,
             start_time: self.start_time.try_to_rfc3339_string().unwrap(),
             end_time: self.end_time.try_to_rfc3339_string().unwrap(),
         }
