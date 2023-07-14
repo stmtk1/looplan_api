@@ -41,6 +41,7 @@ async fn main() {
         .route("/signup", post(create_user))
         .route("/signin", post(create_session))
         .route("/schedule", get(get_schedule))
+        .route("/schedule", post(create_schedule))
         .with_state(db)
         .layer(cors);
 
@@ -107,6 +108,7 @@ struct CreateUser {
 #[derive(Deserialize)]
 struct CreateSession {
     user_name: String,
+    #[allow(dead_code)]
     password: String,
 }
 
@@ -114,6 +116,7 @@ struct CreateSession {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Session {
     #[serde(rename="_id", skip_serializing)]
+    #[allow(dead_code)]
     id: Option<ObjectId>,
     user_id: ObjectId,
     token: String,
@@ -130,29 +133,55 @@ async fn create_session(
     // with a status code of `201 Created`
     (StatusCode::ACCEPTED, Json(session))
 }
-
+async fn validate_session(map: &HeaderMap, db_pool: &Database) -> Session {
+    let token = map.get("authorization").unwrap().to_str().unwrap().get(7..).unwrap();
+    let session_collection = db_pool.collection::<Session>("sessions");
+    session_collection.find_one(Some(doc!{ "token": token }), None).await.unwrap().unwrap()
+}
 async fn get_schedule(
     State(db_pool): State<Database>,
     map :HeaderMap<HeaderValue>,
-    Query(getSchedules): Query<GetSchedules>
+    Query(get_schedules): Query<GetSchedules>
 ) -> (StatusCode, Json<Schedules>) {
-    let token = map.get("authorization").unwrap().to_str().unwrap().get(7..).unwrap();
-    let session_collection = db_pool.collection::<Session>("sessions");
-    let session = session_collection.find_one(Some(doc!{ "token": token }), None).await.unwrap().unwrap();
+    let session = validate_session(&map, &db_pool).await;
     let schedule_collection = db_pool.collection::<Schedule>("schedule");
     let mut schedules_cursor = schedule_collection.find(Some(doc!{ "user_id": session.user_id }), None).await.unwrap();
     let mut schedules = vec![];
     while schedules_cursor.advance().await.unwrap() {
+        println!("hello");
         schedules.push(schedules_cursor.deserialize_current().unwrap());
     }
     (StatusCode::OK, Json(Schedules{ schedules }))
 }
 
+async fn create_schedule(
+    // this argument tells axum to parse the request body
+    // as JSON into a `CreateUser` type
+    State(db_pool): State<Database>,
+    map :HeaderMap<HeaderValue>,
+    Json(payload): Json<CreateSchedule>,
+) -> (StatusCode, Json<Schedule>) {
+    println!("hello world");
+    let session = validate_session(&map, &db_pool).await;
+    let schedule_collection = db_pool.collection::<Schedule>("schedule");
+    let schedule = Schedule {
+        id: None,
+        name: payload.name.clone(),
+        description: payload.description.clone(),
+        start_time: payload.start_time.clone(),
+        end_time: payload.end_time.clone(),
+        user_id: session.user_id,
+    };
+    schedule_collection.insert_one(schedule.clone(), None).await.unwrap();
+    (StatusCode::ACCEPTED, Json(schedule))
+}
+
+
 #[derive(Deserialize)]
 struct GetSchedules {
-     #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
+    #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
     start_time: DateTime,
-     #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
+    #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
     end_time: DateTime,
 }
 
@@ -161,12 +190,23 @@ struct Schedules {
     schedules: Vec<Schedule>
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 struct Schedule {
+    #[allow(dead_code)]
     #[serde(rename="_id", skip_serializing)]
     id: Option<ObjectId>,
     user_id: ObjectId,
     start_time: DateTime,
+    end_time: DateTime,
+    name: String,
+    description: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct CreateSchedule {
+    #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
+    start_time: DateTime,
+    #[serde(with = "bson::serde_helpers::bson_datetime_as_rfc3339_string")]
     end_time: DateTime,
     name: String,
     description: String,
