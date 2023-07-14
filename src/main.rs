@@ -144,12 +144,11 @@ async fn get_schedule(
     Query(get_schedules): Query<GetSchedules>
 ) -> (StatusCode, Json<Schedules>) {
     let session = validate_session(&map, &db_pool).await;
-    let schedule_collection = db_pool.collection::<Schedule>("schedule");
-    let mut schedules_cursor = schedule_collection.find(Some(doc!{ "user_id": session.user_id }), None).await.unwrap();
+    let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
+    let mut schedules_cursor = schedule_collection.find(Some(doc!{"user_id": session.user_id }), None).await.unwrap();
     let mut schedules = vec![];
     while schedules_cursor.advance().await.unwrap() {
-        println!("hello");
-        schedules.push(schedules_cursor.deserialize_current().unwrap());
+        schedules.push(schedules_cursor.deserialize_current().unwrap().to_schedule());
     }
     (StatusCode::OK, Json(Schedules{ schedules }))
 }
@@ -160,16 +159,15 @@ async fn create_schedule(
     State(db_pool): State<Database>,
     map :HeaderMap<HeaderValue>,
     Json(payload): Json<CreateSchedule>,
-) -> (StatusCode, Json<Schedule>) {
-    println!("hello world");
+) -> (StatusCode, Json<InsertSchedule>) {
     let session = validate_session(&map, &db_pool).await;
-    let schedule_collection = db_pool.collection::<Schedule>("schedule");
-    let schedule = Schedule {
+    let schedule_collection = db_pool.collection::<InsertSchedule>("schedule");
+    let schedule = InsertSchedule {
         id: None,
         name: payload.name.clone(),
         description: payload.description.clone(),
         start_time: payload.start_time.clone(),
-        end_time: payload.end_time.clone(),
+        end_time: payload.end_time,
         user_id: session.user_id,
     };
     schedule_collection.insert_one(schedule.clone(), None).await.unwrap();
@@ -191,7 +189,31 @@ struct Schedules {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+struct DbSchedule {
+    #[allow(dead_code)]
+    #[serde(rename="_id", skip_serializing)]
+    id: Option<ObjectId>,
+    user_id: ObjectId,
+    start_time: DateTime,
+    end_time: DateTime,
+    name: String,
+    description: String,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
 struct Schedule {
+    #[allow(dead_code)]
+    #[serde(rename="_id", skip_serializing)]
+    id: Option<ObjectId>,
+    user_id: ObjectId,
+    start_time: String,
+    end_time: String,
+    name: String,
+    description: String,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+struct InsertSchedule {
     #[allow(dead_code)]
     #[serde(rename="_id", skip_serializing)]
     id: Option<ObjectId>,
@@ -210,4 +232,17 @@ struct CreateSchedule {
     end_time: DateTime,
     name: String,
     description: String,
+}
+
+impl DbSchedule {
+    fn to_schedule(&self) -> Schedule {
+        Schedule {
+            name: self.name.clone(),
+            description: self.description.clone(),
+            id: self.id.clone(),
+            user_id: self.user_id.clone(),
+            start_time: self.start_time.try_to_rfc3339_string().unwrap(),
+            end_time: self.end_time.try_to_rfc3339_string().unwrap(),
+        }
+    }
 }
