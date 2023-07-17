@@ -17,19 +17,19 @@ mongoose.connect('mongodb://127.0.0.1:27017/looplan').then(async () => {
 
 	const sessions = new Schema({ 
 		_id: Types.ObjectId,
-		user_id: { type: Types.ObjectId, },
+		user_id: { type: Types.ObjectId, ref: "users", },
 		token: { type: Schema.Types.UUID, }
 	});
 	await mongoose.model('sessions', sessions).createCollection();
 
 	const schedule = new Schema({
 		_id: Types.ObjectId,
-		user_id: { type: Types.ObjectId, },
+		user_id: { type: Types.ObjectId, ref: "users", },
 		start_time: { type: Date, },
 		end_time: { type: Date, },
-		name: { type: String, },
-		description: { type: String, },
+		name: { type: String, minLength: 3, maxLength: 100 },
+		description: { type: String, minLength: 0, maxLength: 1000 },
 	});
 	await mongoose.model('schedule', schedule).createCollection();
 	exit();
-})
+});
