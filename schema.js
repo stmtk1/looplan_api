@@ -1,88 +1,35 @@
-db.createCollection("users", {
-	validator: {
-		$jsonSchema: {
-			bsonType: "object",
-			additionalProperties: false,
-			title: "User Object Validation",
-			required: ["name", "password_hash"],
-			properties: {
-				_id: {
-					bsonType: "objectId",
-				},
-				name: {
-					bsonType: "string",
-					description: "'name must be string and is required'",
-					minLength: 4,
-					maxLength: 16,
-				},
-				password_hash: {
-					bsonType: "string",
-					description: "'password' must be string and is required'",
-					minLength: 50,
-					maxLength: 200,
-					pattern: '^\\$argon2i\\$v=19\\$m=\\d{1,10},t=\\d{1,10},p=\\d{1,3}\\$[\\w\\d]{11,84}\\$[\\w\\d+/]{16,86}$',
-				},
-			},
-		},
-	},
-})
+const mongoose = require('mongoose');
+const { exit } = require('process');
+const { Schema, Types } = mongoose;
 
-db.createCollection("sessions", {
-	validator: {
-		$jsonSchema: {
-			bsonType: "object",
-			additionalProperties: false,
-			title: "Session Object Validation",
-			required: ["user_id", "token"],
-			properties: {
-				_id: {
-					bsonType: "objectId",
-				},
-				user_id: {
-					bsonType: "objectId",
-					description: "user associated",
-				},
-				token: {
-					bsonType: "string",
-					description: "for bearer token",
-				},
-			},
+mongoose.connect('mongodb://127.0.0.1:27017/looplan').then(async () => {
+	const users = new Schema({
+		_id: Types.ObjectId,
+		name: { type: String, minLength: 4, maxLength: 16, },
+		password_hash: {
+			type: String,
+			match: /^\\$argon2i\\$v=19\\$m=\\d{1,10},t=\\d{1,10},p=\\d{1,3}\\$[\\w\\d]{11,84}\\$[\\w\\d+/]{16,86}$/,
+			minLength: 50,
+			maxLength: 200,
 		},
-	},
-});
+	});
+	await mongoose.model('users', users).createCollection();
 
-db.createCollection("schedule", {
-	validator: {
-		$jsonSchema: {
-			bsonType: "object",
-			additionalProperties: false,
-			title: "Schedule Object Validation",
-			required: ["user_id", "start_time", "end_time", "name", "description"],
-			properties: {
-				_id: {
-					bsonType: "objectId",
-				},
-				user_id: {
-					bsonType: "objectId",
-					description: "user associated",
-				},
-				start_time: {
-					bsonType: "date",
-					description: "schedule start time",
-				},
-				end_time: {
-					bsonType: "date",
-					description: "schedule start time",
-				},
-				name: {
-					bsonType: "string",
-					description: "schedule name",
-				},
-				description: {
-					bsonType: "string",
-					description: "schedule description",
-				},
-			},
-		},
-	},
+	const sessions = new Schema({ 
+		_id: Types.ObjectId,
+		user_id: { type: Types.ObjectId, },
+		token: { type: String, }
+	});
+	await mongoose.model('sessions', sessions).createCollection();
+
+	const schedule = new Schema({
+		_id: Types.ObjectId,
+		user_id: { type: Types.ObjectId, },
+		start_time: { type: Date, },
+		end_time: { type: Date, },
+		name: { type: String, },
+		description: { type: String, },
+	});
+	await mongoose.model('schedule', schedule).createCollection();
+	exit();
 })
