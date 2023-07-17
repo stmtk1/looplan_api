@@ -72,14 +72,14 @@ async fn insert_session(db_pool: &Database, dto: CreateSession) -> Session {
     let user_id = user_collection
         .find_one(Some(doc!{"name": dto.user_name.clone()}), None).await.unwrap().unwrap().id.unwrap();
     let session_collection = db_pool.collection::<Session>("sessions");
-    let token = uuid::Uuid::new_v4().to_string();
+    let token = uuid::Uuid::new_v4();
     let session = Session {
         id: None,
-        token: token.clone(),
+        token,
         user_id,
     };
     session_collection.insert_one(session, None).await.unwrap();
-    session_collection.find_one(Some(doc!["token": token.clone()]), None).await.unwrap().unwrap()
+    session_collection.find_one(Some(doc!["token": token]), None).await.unwrap().unwrap()
 }
 
 async fn create_user(
@@ -119,7 +119,8 @@ struct Session {
     #[allow(dead_code)]
     id: Option<ObjectId>,
     user_id: ObjectId,
-    token: String,
+    #[serde(with = "bson::serde_helpers::uuid_1_as_binary")]
+    token: uuid::Uuid,
 }
 
 async fn create_session(
@@ -134,7 +135,7 @@ async fn create_session(
     (StatusCode::ACCEPTED, Json(session))
 }
 async fn validate_session(map: &HeaderMap, db_pool: &Database) -> Session {
-    let token = map.get("authorization").unwrap().to_str().unwrap().get(7..).unwrap();
+    let token = uuid::Uuid::parse_str(map.get("authorization").unwrap().to_str().unwrap().get(7..).unwrap()).unwrap();
     let session_collection = db_pool.collection::<Session>("sessions");
     session_collection.find_one(Some(doc!{ "token": token }), None).await.unwrap().unwrap()
 }
@@ -166,7 +167,6 @@ async fn create_schedule(
     let session = validate_session(&map, &db_pool).await;
     let schedule_collection = db_pool.collection::<InsertSchedule>("schedule");
     let schedule = InsertSchedule {
-        id: None,
         name: payload.name.clone(),
         description: payload.description.clone(),
         start_time: payload.start_time,
@@ -217,9 +217,6 @@ struct Schedule {
 
 #[derive(Deserialize, Serialize, Clone)]
 struct InsertSchedule {
-    #[allow(dead_code)]
-    #[serde(rename="_id", skip_serializing)]
-    id: Option<ObjectId>,
     user_id: ObjectId,
     start_time: DateTime,
     end_time: DateTime,

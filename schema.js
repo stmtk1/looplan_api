@@ -18,7 +18,7 @@ mongoose.connect('mongodb://127.0.0.1:27017/looplan').then(async () => {
 	const sessions = new Schema({ 
 		_id: Types.ObjectId,
 		user_id: { type: Types.ObjectId, },
-		token: { type: String, }
+		token: { type: Schema.Types.UUID, }
 	});
 	await mongoose.model('sessions', sessions).createCollection();
 
