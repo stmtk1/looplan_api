@@ -12,8 +12,14 @@ use tower_http::cors::CorsLayer;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct User {
-    #[serde(rename="_id", skip_serializing)]
-    id: Option<ObjectId>,
+    #[serde(rename="_id")]
+    id: ObjectId,
+    name: String,
+    password_hash: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct InsertUser {
     name: String,
     password_hash: String,
 }
@@ -57,28 +63,27 @@ async fn root() -> &'static str {
 
 async fn insert_user(db_pool: &Database, payload: CreateUser) {
     let password_hash = argon2::hash_encoded(payload.password.as_bytes(), b"salt_salt_salt", &argon2::Config::default()).unwrap();
-    let user= User {
-        id: None,
+    let user= InsertUser {
         name: payload.user_name.clone(),
         password_hash,
     };
 
-    let user_collection = db_pool.collection::<User>("users");
+    let user_collection = db_pool.collection::<InsertUser>("users");
     user_collection.insert_one(user, None).await.unwrap();
 }
 
 async fn insert_session(db_pool: &Database, dto: CreateSession) -> Session {
     let user_collection = db_pool.collection::<User>("users");
     let user_id = user_collection
-        .find_one(Some(doc!{"name": dto.user_name.clone()}), None).await.unwrap().unwrap().id.unwrap();
-    let session_collection = db_pool.collection::<Session>("sessions");
+        .find_one(Some(doc!{"name": dto.user_name.clone()}), None).await.unwrap().unwrap().id;
+    let session_collection = db_pool.collection::<InsertSession>("sessions");
     let token = uuid::Uuid::new_v4();
-    let session = Session {
-        id: None,
+    let session = InsertSession {
         token,
         user_id,
     };
     session_collection.insert_one(session, None).await.unwrap();
+    let session_collection = db_pool.collection::<Session>("sessions");
     session_collection.find_one(Some(doc!["token": token]), None).await.unwrap().unwrap()
 }
 
@@ -112,12 +117,19 @@ struct CreateSession {
     password: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct InsertSession {
+    user_id: ObjectId,
+    #[serde(with = "bson::serde_helpers::uuid_1_as_binary")]
+    token: uuid::Uuid,
+}
+
 // the output to our `create_user` handler
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct Session {
-    #[serde(rename="_id", skip_serializing)]
+    #[serde(rename="_id")]
     #[allow(dead_code)]
-    id: Option<ObjectId>,
+    id: ObjectId,
     user_id: ObjectId,
     #[serde(with = "bson::serde_helpers::uuid_1_as_binary")]
     token: uuid::Uuid,
@@ -193,9 +205,8 @@ struct Schedules {
 
 #[derive(Deserialize, Serialize, Clone)]
 struct DbSchedule {
-    #[allow(dead_code)]
-    #[serde(rename="_id", skip_serializing)]
-    id: Option<ObjectId>,
+    #[serde(rename="_id")]
+    id: ObjectId,
     user_id: ObjectId,
     start_time: DateTime,
     end_time: DateTime,
@@ -205,9 +216,8 @@ struct DbSchedule {
 
 #[derive(Deserialize, Serialize, Clone)]
 struct Schedule {
-    #[allow(dead_code)]
-    #[serde(rename="_id", skip_serializing)]
-    id: Option<ObjectId>,
+    #[serde(rename="_id")]
+    id: ObjectId,
     user_id: ObjectId,
     start_time: String,
     end_time: String,
