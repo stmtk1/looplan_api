@@ -1,6 +1,6 @@
 
 use axum::{
-    extract::{ State, Query, },
+    extract::{ State, Query, Path, },
     http::{ HeaderValue ,Method, StatusCode, header::{ CONTENT_TYPE, AUTHORIZATION, HeaderMap } },
     Json, Router,
     routing::{ get, post },
@@ -48,6 +48,8 @@ async fn main() {
         .route("/signin", post(create_session))
         .route("/schedule", get(get_schedule))
         .route("/schedule", post(create_schedule))
+        .route("/schedule/:schedule_id", get(get_schedule_detail))
+        .route("/schedule/:schedule_id", post(update_schedule))
         .with_state(db)
         .layer(cors);
 
@@ -151,6 +153,15 @@ async fn validate_session(map: &HeaderMap, db_pool: &Database) -> Session {
     let session_collection = db_pool.collection::<Session>("sessions");
     session_collection.find_one(Some(doc!{ "token": token }), None).await.unwrap().unwrap()
 }
+async fn get_schedule_detail(
+    State(db_pool): State<Database>,
+    Path(schedule_id): Path<String>
+) -> (StatusCode, Json<Schedule>) {
+    let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
+    let schedule = schedule_collection.find_one(Some(doc!{ "_id": bson::oid::ObjectId::parse_str(schedule_id).unwrap() }), None).await.unwrap().unwrap();
+    (StatusCode::OK, Json(schedule.to_schedule()))
+}
+
 async fn get_schedule(
     State(db_pool): State<Database>,
     map :HeaderMap<HeaderValue>,
@@ -189,6 +200,25 @@ async fn create_schedule(
     (StatusCode::ACCEPTED, Json(schedule))
 }
 
+async fn update_schedule(
+    // this argument tells axum to parse the request body
+    // as JSON into a `CreateUser` type
+    State(db_pool): State<Database>,
+    map :HeaderMap<HeaderValue>,
+    Path(schedule_id): Path<String>,
+    Json(payload): Json<CreateSchedule>,
+) -> (StatusCode, Json<Schedule>) {
+    let session = validate_session(&map, &db_pool).await;
+    let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
+    println!("{:?}, {:?}", session.user_id, ObjectId::parse_str(schedule_id.clone()).unwrap());
+    let schedule = schedule_collection.find_one_and_update(
+        doc!{ "user_id": session.user_id, "_id": ObjectId::parse_str(schedule_id).unwrap()},
+        doc!{ "$set": {"name": payload.name.clone(), "description": payload.description.clone(), "start_time": payload.start_time, "end_time": payload.end_time}},
+        None)
+        .await.unwrap().unwrap();
+    (StatusCode::ACCEPTED, Json(schedule.to_schedule()))
+}
+
 
 #[derive(Deserialize)]
 struct GetSchedules {
@@ -216,8 +246,7 @@ struct DbSchedule {
 
 #[derive(Deserialize, Serialize, Clone)]
 struct Schedule {
-    #[serde(rename="_id")]
-    id: ObjectId,
+    id: String,
     user_id: ObjectId,
     start_time: String,
     end_time: String,
@@ -249,7 +278,7 @@ impl DbSchedule {
         Schedule {
             name: self.name.clone(),
             description: self.description.clone(),
-            id: self.id,
+            id: self.id.to_hex(),
             user_id: self.user_id,
             start_time: self.start_time.try_to_rfc3339_string().unwrap(),
             end_time: self.end_time.try_to_rfc3339_string().unwrap(),
