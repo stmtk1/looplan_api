@@ -50,6 +50,8 @@ async fn main() {
         .route("/schedule", post(create_schedule))
         .route("/schedule/:schedule_id", get(get_schedule_detail))
         .route("/schedule/:schedule_id", post(update_schedule))
+        .route("/schedule_color", get(get_schedule_color))
+        .route("/schedule_color", post(create_schedule_color))
         .with_state(db)
         .layer(cors);
 
@@ -157,7 +159,7 @@ async fn get_schedule_detail(
     State(db_pool): State<Database>,
     Path(schedule_id): Path<String>
 ) -> (StatusCode, Json<Schedule>) {
-    let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
+    let schedule_collection = db_pool.collection::<DbSchedule>("schedules");
     let schedule = schedule_collection.find_one(Some(doc!{ "_id": bson::oid::ObjectId::parse_str(schedule_id).unwrap() }), None).await.unwrap().unwrap();
     (StatusCode::OK, Json(schedule.to_schedule()))
 }
@@ -168,7 +170,7 @@ async fn get_schedule(
     Query(get_schedules): Query<GetSchedules>
 ) -> (StatusCode, Json<Schedules>) {
     let session = validate_session(&map, &db_pool).await;
-    let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
+    let schedule_collection = db_pool.collection::<DbSchedule>("schedules");
     let mut schedules_cursor = schedule_collection.find(Some(doc!{
         "user_id": session.user_id,
         "start_time": { "$gte": get_schedules.start_time, "$lte": get_schedules.end_time, },
@@ -180,6 +182,31 @@ async fn get_schedule(
     (StatusCode::OK, Json(Schedules{ schedules }))
 }
 
+async fn get_schedule_color(
+    State(db_pool): State<Database>,
+    map :HeaderMap<HeaderValue>,
+) -> (StatusCode, Json<ScheduleColors>) {
+    validate_session(&map, &db_pool).await;
+    let schedule_collection = db_pool.collection::<DbScheduleColor>("schedule_colors");
+    let mut schedules_cursor = schedule_collection.find(Some(doc!{}), None).await.unwrap();
+    let mut schedule_colors = vec![];
+    while schedules_cursor.advance().await.unwrap() {
+        schedule_colors.push(schedules_cursor.deserialize_current().unwrap().to_schedule_color());
+    }
+    (StatusCode::OK, Json(ScheduleColors{ schedule_colors }))
+}
+
+async fn create_schedule_color(
+    State(db_pool): State<Database>,
+    map :HeaderMap<HeaderValue>,
+    Json(payload): Json<CreateScheduleColor>,
+) -> (StatusCode, Json<CreateScheduleColor>) {
+    validate_session(&map, &db_pool).await;
+    let schedule_collection = db_pool.collection::<CreateScheduleColor>("schedule_colors");
+    schedule_collection.insert_one(payload.clone(), None).await.unwrap();
+    (StatusCode::ACCEPTED, Json(payload))
+}
+
 async fn create_schedule(
     // this argument tells axum to parse the request body
     // as JSON into a `CreateUser` type
@@ -188,14 +215,16 @@ async fn create_schedule(
     Json(payload): Json<CreateSchedule>,
 ) -> (StatusCode, Json<InsertSchedule>) {
     let session = validate_session(&map, &db_pool).await;
-    let schedule_collection = db_pool.collection::<InsertSchedule>("schedule");
+    let schedule_collection = db_pool.collection::<InsertSchedule>("schedules");
     let schedule = InsertSchedule {
         name: payload.name.clone(),
         description: payload.description.clone(),
         start_time: payload.start_time,
         end_time: payload.end_time,
         user_id: session.user_id,
+        color_id: ObjectId::parse_str(payload.color_id).unwrap(),
     };
+    println!("{:?}", schedule);
     schedule_collection.insert_one(schedule.clone(), None).await.unwrap();
     (StatusCode::ACCEPTED, Json(schedule))
 }
@@ -209,13 +238,13 @@ async fn update_schedule(
     Json(payload): Json<CreateSchedule>,
 ) -> (StatusCode, Json<Schedule>) {
     let session = validate_session(&map, &db_pool).await;
-    let schedule_collection = db_pool.collection::<DbSchedule>("schedule");
-    println!("{:?}, {:?}", session.user_id, ObjectId::parse_str(schedule_id.clone()).unwrap());
+    let schedule_collection = db_pool.collection::<DbSchedule>("schedules");
     let schedule = schedule_collection.find_one_and_update(
         doc!{ "user_id": session.user_id, "_id": ObjectId::parse_str(schedule_id).unwrap()},
         doc!{ "$set": {"name": payload.name.clone(), "description": payload.description.clone(), "start_time": payload.start_time, "end_time": payload.end_time}},
         None)
         .await.unwrap().unwrap();
+    println!("{:?}, {:?}", session.user_id, schedule.clone());
     (StatusCode::ACCEPTED, Json(schedule.to_schedule()))
 }
 
@@ -232,8 +261,43 @@ struct GetSchedules {
 struct Schedules {
     schedules: Vec<Schedule>
 }
+#[derive(Deserialize, Serialize, Clone)]
+struct ScheduleColors {
+    schedule_colors: Vec<ScheduleColor>,
+}
 
 #[derive(Deserialize, Serialize, Clone)]
+struct CreateScheduleColor {
+    name: String,
+    color: String,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+struct ScheduleColor {
+    id: String,
+    name: String,
+    color: String,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+struct DbScheduleColor {
+    #[serde(rename="_id")]
+    id: ObjectId,
+    name: String,
+    color: String,
+}
+
+impl DbScheduleColor {
+    fn to_schedule_color(&self) -> ScheduleColor {
+        ScheduleColor { 
+          id: self.id.to_hex(),
+          name: self.name.clone(),
+          color: self.color.clone(),
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
 struct DbSchedule {
     #[serde(rename="_id")]
     id: ObjectId,
@@ -242,6 +306,7 @@ struct DbSchedule {
     end_time: DateTime,
     name: String,
     description: String,
+    color_id: ObjectId,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -252,15 +317,17 @@ struct Schedule {
     end_time: String,
     name: String,
     description: String,
+    color_id: ObjectId,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 struct InsertSchedule {
     user_id: ObjectId,
     start_time: DateTime,
     end_time: DateTime,
     name: String,
     description: String,
+    color_id: ObjectId,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -271,6 +338,7 @@ struct CreateSchedule {
     end_time: DateTime,
     name: String,
     description: String,
+    color_id: String,
 }
 
 impl DbSchedule {
@@ -282,6 +350,7 @@ impl DbSchedule {
             user_id: self.user_id,
             start_time: self.start_time.try_to_rfc3339_string().unwrap(),
             end_time: self.end_time.try_to_rfc3339_string().unwrap(),
+            color_id: self.color_id,
         }
     }
 }
